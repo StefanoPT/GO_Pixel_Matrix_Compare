@@ -10,10 +10,11 @@ import (
 	"time"
 )
 
-const MatrixSize = 1024
 const MatrixDivider = 4
 const PixelSize = 3
 const ReadingFactor = 4
+
+var MatrixSize int
 
 type Pixel struct {
 	RGB [PixelSize]int
@@ -23,17 +24,48 @@ type Matrix struct {
 	Pixels []Pixel
 }
 
+type Result struct {
+	File                string
+	Percent             float64
+	NumberOfEqualPixels int
+}
+
 var MainImage Matrix
+var FinalResult []Result
+var Best Result
+var Second Result
+var Third Result
 
 func (m Matrix) getReadingChunckSize() int {
-	return (len(m.Pixels) * 3) / ReadingFactor
+	return (m.getSize() * 3) / ReadingFactor
+}
+
+func (m Matrix) getSize() int {
+	return len(m.Pixels)
 }
 
 func parseMatrix(startingPoint, interval int, file []byte) {
 	fmt.Println(startingPoint)
 }
 
-func parseFiles(file fs.FileInfo, n int, wg *sync.WaitGroup) {
+func updateResults(res Result) {
+	if res.Percent > Best.Percent {
+		Third = Second
+		Second = Best
+		Best = res
+		return
+	}
+	if res.Percent > Second.Percent {
+		Third = Second
+		Second = res
+		return
+	}
+	if res.Percent > Third.Percent {
+		Third = res
+	}
+}
+
+func parseFiles(file fs.DirEntry, wg *sync.WaitGroup, dir string) {
 	defer wg.Done()
 
 	fileExtension := filepath.Ext(file.Name())
@@ -42,14 +74,35 @@ func parseFiles(file fs.FileInfo, n int, wg *sync.WaitGroup) {
 		return
 	}
 
-	_, err := os.ReadFile("./Bronze/" + file.Name())
+	fname := filepath.Join(dir, file.Name())
+	data, err := os.ReadFile(fname)
 
 	if err != nil {
 		fmt.Print(err)
 		return
 	}
 
-	return
+	var wgLocal sync.WaitGroup
+	readingChunck := MainImage.getReadingChunckSize()
+
+	numEqual := 0
+
+	for i := 0; i < ReadingFactor; i++ {
+		wgLocal.Add(1)
+		readFrom := i * readingChunck
+		startingPoint := readFrom / PixelSize
+		readTo := readFrom + readingChunck
+		resultChannel := make(chan int)
+		go parseAndCompareMatrixes(startingPoint, &wgLocal, data[readFrom:readTo], resultChannel)
+		numEqual += <-resultChannel
+	}
+
+	wgLocal.Wait()
+
+	result := Result{File: fname, Percent: float64(numEqual) / float64(MainImage.getSize()), NumberOfEqualPixels: numEqual}
+	FinalResult = append(FinalResult, result)
+
+	updateResults(result)
 }
 
 func checkAndPutPixel(pixelCount int, pixel Pixel) {
@@ -57,6 +110,34 @@ func checkAndPutPixel(pixelCount int, pixel Pixel) {
 		return
 	}
 
+}
+
+func parseAndCompareMatrixes(startingPoint int, wg *sync.WaitGroup, filePiece []byte, ch chan int) {
+	defer wg.Done()
+	startingPos := startingPoint
+	numberOfPixelsToRead := MainImage.getReadingChunckSize()
+	rgbCount := 0
+	pixel := Pixel{RGB: [3]int{0, 0, 0}}
+	numberOfEqualPixels := 0
+
+	for n, el := range filePiece {
+		if n == numberOfPixelsToRead {
+			break
+		}
+
+		pixel.RGB[rgbCount] = int(el)
+		rgbCount += 1
+		if rgbCount != 3 { //if we read 3 bytes then we read a pixel
+			continue
+		}
+
+		rgbCount = 0
+		if pixel == MainImage.Pixels[startingPos] {
+			numberOfEqualPixels += 1
+		}
+		startingPos += 1
+	}
+	ch <- numberOfEqualPixels
 }
 
 func parseMainMatrix(startingPoint int, wg *sync.WaitGroup, filePiece []byte) {
@@ -84,8 +165,8 @@ func parseMainMatrix(startingPoint int, wg *sync.WaitGroup, filePiece []byte) {
 }
 
 func makeMainImage(data []byte) {
-	mainImageMatrixSize := len(data) / PixelSize
-	MainImage = Matrix{Pixels: make([]Pixel, mainImageMatrixSize, mainImageMatrixSize)}
+	MatrixSize = len(data) / PixelSize
+	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize, MatrixSize)}
 }
 
 func parseMainImage(filename string) {
@@ -108,13 +189,10 @@ func parseMainImage(filename string) {
 		readFrom := i * readingChunck
 		startingPoint := readFrom / PixelSize
 		readTo := readFrom + readingChunck
-		fmt.Printf("READ from: %v to %v\n", readFrom, readTo)
 		parseMainMatrix(startingPoint, &wg, data[readFrom:readTo])
 		//break
 	}
 	wg.Wait()
-
-	fmt.Println(MainImage.Pixels)
 }
 
 func main() {
@@ -128,9 +206,13 @@ func main() {
 
 	now := time.Now()
 	parseMainImage(imagePath)
-	fmt.Println("TIME:", time.Since(now))
 
-	/*bronzeFiles, err := ioutil.ReadDir(*directory)
+	FinalResult = []Result{}
+	Best = Result{Percent: 0}
+	Second = Result{Percent: 0}
+	Third = Result{Percent: 0}
+
+	bronzeFiles, err := os.ReadDir(*directory)
 
 	if err != nil {
 		return
@@ -138,11 +220,15 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	for n, el := range bronzeFiles {
+	for _, el := range bronzeFiles {
 
 		wg.Add(1)
 
-		go parseFiles(el, n, &wg)
+		go parseFiles(el, &wg, *directory)
 	}
-	wg.Wait()*/
+	wg.Wait()
+
+	fmt.Printf("%v\n%v\n%v\n", Best, Second, Third)
+
+	fmt.Println("TIME:", time.Since(now))
 }
