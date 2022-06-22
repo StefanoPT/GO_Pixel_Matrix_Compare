@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-const MatrixDivider = 4
 const PixelSize = 3
 const ReadingFactor = 4
 
@@ -22,6 +21,7 @@ type Pixel struct {
 
 type Matrix struct {
 	Pixels []Pixel
+	Size   int
 }
 
 type Result struct {
@@ -31,21 +31,12 @@ type Result struct {
 }
 
 var MainImage Matrix
-var FinalResult []Result
 var Best Result
 var Second Result
 var Third Result
 
 func (m Matrix) getReadingChunckSize() int {
-	return (m.getSize() * 3) / ReadingFactor
-}
-
-func (m Matrix) getSize() int {
-	return len(m.Pixels)
-}
-
-func parseMatrix(startingPoint, interval int, file []byte) {
-	fmt.Println(startingPoint)
+	return (m.Size * 3) / ReadingFactor
 }
 
 func updateResults(res Result) {
@@ -99,39 +90,19 @@ func parseFiles(file fs.DirEntry, wg *sync.WaitGroup, dir string) {
 
 	wgLocal.Wait()
 
-	result := Result{File: fname, Percent: float64(numEqual) / float64(MainImage.getSize()), NumberOfEqualPixels: numEqual}
-	FinalResult = append(FinalResult, result)
+	result := Result{File: fname, Percent: float64(numEqual) / float64(MainImage.Size), NumberOfEqualPixels: numEqual}
+	//FinalResult = append(FinalResult, result)
 
 	updateResults(result)
-}
-
-func checkAndPutPixel(pixelCount int, pixel Pixel) {
-	if pixelCount < 3 {
-		return
-	}
-
 }
 
 func parseAndCompareMatrixes(startingPoint int, wg *sync.WaitGroup, filePiece []byte, ch chan int) {
 	defer wg.Done()
 	startingPos := startingPoint
-	numberOfPixelsToRead := MainImage.getReadingChunckSize()
-	rgbCount := 0
-	pixel := Pixel{RGB: [3]int{0, 0, 0}}
 	numberOfEqualPixels := 0
 
-	for n, el := range filePiece {
-		if n == numberOfPixelsToRead {
-			break
-		}
-
-		pixel.RGB[rgbCount] = int(el)
-		rgbCount += 1
-		if rgbCount != 3 { //if we read 3 bytes then we read a pixel
-			continue
-		}
-
-		rgbCount = 0
+	for i := 0; i < len(filePiece); i += PixelSize {
+		pixel := Pixel{RGB: [3]int{int(filePiece[i]), int(filePiece[i+1]), int(filePiece[i+2])}}
 		if pixel == MainImage.Pixels[startingPos] {
 			numberOfEqualPixels += 1
 		}
@@ -143,22 +114,9 @@ func parseAndCompareMatrixes(startingPoint int, wg *sync.WaitGroup, filePiece []
 func parseMainMatrix(startingPoint int, wg *sync.WaitGroup, filePiece []byte) {
 	defer wg.Done()
 	startingPos := startingPoint
-	numberOfPixelsToRead := MainImage.getReadingChunckSize()
-	rgbCount := 0
-	pixel := Pixel{RGB: [3]int{0, 0, 0}}
 
-	for n, el := range filePiece {
-		if n == numberOfPixelsToRead {
-			break
-		}
-
-		pixel.RGB[rgbCount] = int(el)
-		rgbCount += 1
-		if rgbCount != 3 { //if we read 3 bytes then we read a pixel
-			continue
-		}
-
-		rgbCount = 0
+	for i := 0; i < len(filePiece); i += PixelSize {
+		pixel := Pixel{RGB: [3]int{int(filePiece[i]), int(filePiece[i+1]), int(filePiece[i+2])}}
 		MainImage.Pixels[startingPos] = pixel
 		startingPos += 1
 	}
@@ -166,7 +124,7 @@ func parseMainMatrix(startingPoint int, wg *sync.WaitGroup, filePiece []byte) {
 
 func makeMainImage(data []byte) {
 	MatrixSize = len(data) / PixelSize
-	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize, MatrixSize)}
+	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize, MatrixSize), Size: MatrixSize}
 }
 
 func parseMainImage(filename string) {
@@ -189,8 +147,7 @@ func parseMainImage(filename string) {
 		readFrom := i * readingChunck
 		startingPoint := readFrom / PixelSize
 		readTo := readFrom + readingChunck
-		parseMainMatrix(startingPoint, &wg, data[readFrom:readTo])
-		//break
+		go parseMainMatrix(startingPoint, &wg, data[readFrom:readTo])
 	}
 	wg.Wait()
 }
@@ -207,7 +164,7 @@ func main() {
 	now := time.Now()
 	parseMainImage(imagePath)
 
-	FinalResult = []Result{}
+	//FinalResult = []Result{}
 	Best = Result{Percent: 0}
 	Second = Result{Percent: 0}
 	Third = Result{Percent: 0}
@@ -228,7 +185,7 @@ func main() {
 	}
 	wg.Wait()
 
-	fmt.Printf("%v\n%v\n%v\n", Best, Second, Third)
+	fmt.Printf("BEST: %v\nSECOND: %v\nTHIRD: %v\n", Best, Second, Third)
 
 	fmt.Println("TIME:", time.Since(now))
 }
