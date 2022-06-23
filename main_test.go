@@ -5,12 +5,6 @@ import (
 	"testing"
 )
 
-func getMatrixForTests() Matrix {
-	matrixSize := MatrixSize * MatrixSize / PixelSize
-	matrix := Matrix{Pixels: make([]Pixel, matrixSize, matrixSize), Size: matrixSize}
-	return matrix
-}
-
 type TopThree struct {
 	FirstRes  Result
 	SecondRes Result
@@ -23,21 +17,6 @@ func makeTopThree() TopThree {
 	third := Result{Percent: 0.8}
 	topThree := TopThree{FirstRes: best, SecondRes: second, ThirdRes: third}
 	return topThree
-}
-
-func TestGetReadingChunckSize(t *testing.T) {
-
-	//Arrange
-	matrix := getMatrixForTests()
-	expected := (matrix.Size * PixelSize) / ReadingFactor
-
-	//Act
-	received := matrix.getReadingChunckSize()
-
-	//Assert
-	if expected != received {
-		t.Errorf("Expected (%d) != received (%d)", expected, received)
-	}
 }
 
 func remakeTopThree(tt TopThree) {
@@ -98,7 +77,8 @@ func TestUpdateResults(t *testing.T) {
 
 func TestMakeMainImage(t *testing.T) {
 	//Arrange
-	testFile, err := os.ReadFile("./Bronze/main.raw")
+	fn := "./Bronze/main.raw"
+	testFile, err := os.ReadFile(fn)
 
 	if err != nil {
 		t.Fatalf("Failed to read testing file for image")
@@ -109,9 +89,9 @@ func TestMakeMainImage(t *testing.T) {
 		matrix     Matrix
 	}
 
-	expected := ExpectedValues{matrixSize: len(testFile) / PixelSize, matrix: Matrix{Pixels: make([]Pixel, len(testFile), len(testFile)), Size: len(testFile) / PixelSize}}
+	expected := ExpectedValues{matrixSize: len(testFile) / PixelSize, matrix: Matrix{Pixels: make([]Pixel, len(testFile)), Size: len(testFile) / PixelSize}}
 	//Act
-	makeMainImage(testFile)
+	makeMainImage(testFile, fn)
 
 	//Assert
 	if MatrixSize != expected.matrixSize || MainImage.Size != expected.matrix.Size {

@@ -13,6 +13,8 @@ import (
 const PixelSize = 3
 const ReadingFactor = 4
 
+var ReadingChunck int
+
 var MatrixSize int
 
 type Pixel struct {
@@ -35,10 +37,6 @@ var MainImage Matrix
 var Best Result
 var Second Result
 var Third Result
-
-func (m Matrix) getReadingChunckSize() int {
-	return (m.Size * PixelSize) / ReadingFactor
-}
 
 func updateResults(res Result) {
 	if res.Percent > Best.Percent {
@@ -81,16 +79,14 @@ func parseFiles(file fs.DirEntry, dir string, ch chan interface{}) {
 		return
 	}
 
-	readingChunck := MainImage.getReadingChunckSize()
-
 	numEqual := 0
 
 	resultChannel := make(chan int, ReadingFactor)
 
 	for i := 0; i < ReadingFactor; i++ {
-		readFrom := i * readingChunck
+		readFrom := i * ReadingChunck
 		startingPoint := readFrom / PixelSize
-		readTo := readFrom + readingChunck
+		readTo := readFrom + ReadingChunck
 		go parseAndCompareMatrixes(startingPoint, data[readFrom:readTo], resultChannel)
 	}
 
@@ -132,9 +128,10 @@ func parseMainMatrix(startingPoint int, filePiece []byte, ch chan interface{}) {
 	ch <- struct{}{}
 }
 
-func makeMainImage(data []byte, fn *string) {
+func makeMainImage(data []byte, fn string) {
 	MatrixSize = len(data) / PixelSize
-	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize, MatrixSize), Size: MatrixSize, FileName: *fn}
+	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize), Size: MatrixSize, FileName: fn}
+	ReadingChunck = (MatrixSize * PixelSize) / ReadingFactor
 }
 
 func parseMainImage(filename string) (bool, error) {
@@ -146,15 +143,14 @@ func parseMainImage(filename string) (bool, error) {
 		return false, err
 	}
 
-	makeMainImage(data, &filename)
+	makeMainImage(data, filename)
 
-	readingChunck := MainImage.getReadingChunckSize()
 	readCh := make(chan interface{}, ReadingFactor)
 
 	for i := 0; i < ReadingFactor; i += 1 {
-		readFrom := i * readingChunck
+		readFrom := i * ReadingChunck
 		startingPoint := readFrom / PixelSize
-		readTo := readFrom + readingChunck
+		readTo := readFrom + ReadingChunck
 		go parseMainMatrix(startingPoint, data[readFrom:readTo], readCh)
 	}
 
