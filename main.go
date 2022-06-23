@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
@@ -20,8 +20,9 @@ type Pixel struct {
 }
 
 type Matrix struct {
-	Pixels []Pixel
-	Size   int
+	Pixels   []Pixel
+	Size     int
+	FileName string
 }
 
 type Result struct {
@@ -36,7 +37,7 @@ var Second Result
 var Third Result
 
 func (m Matrix) getReadingChunckSize() int {
-	return (m.Size * 3) / ReadingFactor
+	return (m.Size * PixelSize) / ReadingFactor
 }
 
 func updateResults(res Result) {
@@ -56,48 +57,56 @@ func updateResults(res Result) {
 	}
 }
 
-func parseFiles(file fs.DirEntry, wg *sync.WaitGroup, dir string) {
-	defer wg.Done()
+func parseFiles(file fs.DirEntry, dir string, ch chan interface{}) {
 
 	fileExtension := filepath.Ext(file.Name())
 
 	if fileExtension != ".raw" {
+		ch <- struct{}{}
 		return
 	}
 
 	fname := filepath.Join(dir, file.Name())
+
+	if fname == MainImage.FileName {
+		ch <- struct{}{}
+		return
+	}
+
 	data, err := os.ReadFile(fname)
 
 	if err != nil {
 		fmt.Print(err)
+		ch <- struct{}{}
 		return
 	}
 
-	var wgLocal sync.WaitGroup
 	readingChunck := MainImage.getReadingChunckSize()
 
 	numEqual := 0
 
+	resultChannel := make(chan int, ReadingFactor)
+
 	for i := 0; i < ReadingFactor; i++ {
-		wgLocal.Add(1)
 		readFrom := i * readingChunck
 		startingPoint := readFrom / PixelSize
 		readTo := readFrom + readingChunck
-		resultChannel := make(chan int)
-		go parseAndCompareMatrixes(startingPoint, &wgLocal, data[readFrom:readTo], resultChannel)
-		numEqual += <-resultChannel
+		go parseAndCompareMatrixes(startingPoint, data[readFrom:readTo], resultChannel)
 	}
 
-	wgLocal.Wait()
+	for i := 0; i < ReadingFactor; i++ {
+		numEqual += <-resultChannel
+	}
 
 	result := Result{File: fname, Percent: float64(numEqual) / float64(MainImage.Size), NumberOfEqualPixels: numEqual}
 	//FinalResult = append(FinalResult, result)
 
 	updateResults(result)
+	ch <- struct{}{}
 }
 
-func parseAndCompareMatrixes(startingPoint int, wg *sync.WaitGroup, filePiece []byte, ch chan int) {
-	defer wg.Done()
+//parseAndCompareMatrixes takes the starting point in the Main image (the X coordinate) and a few bytes to read and reads them 3 by 3, comparing the resulting RGB to the Main Image
+func parseAndCompareMatrixes(startingPoint int, filePiece []byte, ch chan int) {
 	startingPos := startingPoint
 	numberOfEqualPixels := 0
 
@@ -111,8 +120,7 @@ func parseAndCompareMatrixes(startingPoint int, wg *sync.WaitGroup, filePiece []
 	ch <- numberOfEqualPixels
 }
 
-func parseMainMatrix(startingPoint int, wg *sync.WaitGroup, filePiece []byte) {
-	defer wg.Done()
+func parseMainMatrix(startingPoint int, filePiece []byte, ch chan interface{}) {
 	startingPos := startingPoint
 
 	for i := 0; i < len(filePiece); i += PixelSize {
@@ -120,70 +128,89 @@ func parseMainMatrix(startingPoint int, wg *sync.WaitGroup, filePiece []byte) {
 		MainImage.Pixels[startingPos] = pixel
 		startingPos += 1
 	}
+
+	ch <- struct{}{}
 }
 
-func makeMainImage(data []byte) {
+func makeMainImage(data []byte, fn *string) {
 	MatrixSize = len(data) / PixelSize
-	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize, MatrixSize), Size: MatrixSize}
+	MainImage = Matrix{Pixels: make([]Pixel, MatrixSize, MatrixSize), Size: MatrixSize, FileName: *fn}
 }
 
-func parseMainImage(filename string) {
+func parseMainImage(filename string) (bool, error) {
 
 	data, err := os.ReadFile(filename)
 
 	if err != nil {
 		fmt.Println("Error reading main image: ", err)
-		return
+		return false, err
 	}
 
-	makeMainImage(data)
-
-	var wg sync.WaitGroup
+	makeMainImage(data, &filename)
 
 	readingChunck := MainImage.getReadingChunckSize()
+	readCh := make(chan interface{}, ReadingFactor)
 
 	for i := 0; i < ReadingFactor; i += 1 {
-		wg.Add(1)
 		readFrom := i * readingChunck
 		startingPoint := readFrom / PixelSize
 		readTo := readFrom + readingChunck
-		go parseMainMatrix(startingPoint, &wg, data[readFrom:readTo])
+		go parseMainMatrix(startingPoint, data[readFrom:readTo], readCh)
 	}
-	wg.Wait()
+
+	for i := 0; i < ReadingFactor; i++ {
+		<-readCh
+	}
+
+	return true, nil
+}
+
+func parseImageFiles(directory string) error {
+	imageFiles, err := os.ReadDir(directory)
+
+	if err != nil {
+		return err
+	}
+
+	parseCh := make(chan interface{})
+
+	for _, el := range imageFiles {
+
+		go parseFiles(el, directory, parseCh)
+	}
+
+	for i := 0; i < len(imageFiles); i++ {
+		<-parseCh
+	}
+
+	return nil
 }
 
 func main() {
-
-	directory := flag.String("dir", "./Bronze/", "Directory with all the images")
+	directory := flag.String("dir", ".\\Bronze\\", "Directory with all the images")
 	mainImage := flag.String("img", "", "Main image for comparasion")
 
 	flag.Parse()
 
-	imagePath := filepath.Join(*directory, *mainImage)
-
-	now := time.Now()
-	parseMainImage(imagePath)
-
-	//FinalResult = []Result{}
 	Best = Result{Percent: 0}
 	Second = Result{Percent: 0}
 	Third = Result{Percent: 0}
 
-	bronzeFiles, err := os.ReadDir(*directory)
+	imagePath := filepath.Join(*directory, *mainImage)
+
+	now := time.Now()
+
+	_, err := parseMainImage(imagePath)
 
 	if err != nil {
 		return
 	}
 
-	var wg sync.WaitGroup
+	err = parseImageFiles(*directory)
 
-	for _, el := range bronzeFiles {
-
-		wg.Add(1)
-
-		go parseFiles(el, &wg, *directory)
+	if err != nil {
+		return
 	}
-	wg.Wait()
 
 	fmt.Printf("BEST: %v\nSECOND: %v\nTHIRD: %v\n", Best, Second, Third)
 
