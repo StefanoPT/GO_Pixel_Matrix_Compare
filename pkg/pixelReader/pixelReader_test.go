@@ -100,6 +100,50 @@ func TestMakeMainImage(t *testing.T) {
 	}
 }
 
+func TestSetUp(t *testing.T) {
+	//Arrange
+	best := Result{Percent: 0.0}
+	second := Result{Percent: 0.0}
+	third := Result{Percent: 0.0}
+	//Act
+	setUp()
+	//Assert
+
+	if best != Best || second != Second || third != Third {
+		t.Error("Failed to setup the 3 places")
+	}
+}
+
+func TestComparePixels(t *testing.T) {
+	t.Run("Successfull compare", func(t *testing.T) {
+		//Arrange
+		r := byte(255)
+		g := byte(255)
+		b := byte(255)
+		pixel := [3]byte{255, 255, 255}
+		//Act
+		equal := comparePixels(&r, &g, &b, &pixel)
+		//Assert
+		if !equal {
+			t.Error("Failed Compare Pixels")
+		}
+	})
+
+	t.Run("Failure Compare", func(t *testing.T) {
+		//Arrange
+		r := byte(255)
+		g := byte(255)
+		b := byte(0)
+		pixel := [3]byte{255, 255, 255}
+		//Act
+		equal := comparePixels(&r, &g, &b, &pixel)
+		//Assert
+		if equal {
+			t.Error("Failed Compare Pixels")
+		}
+	})
+}
+
 func TestParseMainImage(t *testing.T) {
 	t.Run("fail: Wrong File Name", func(t *testing.T) {
 		//Arrange
@@ -141,6 +185,24 @@ func TestParseImageFiles(t *testing.T) {
 	t.Run("Existint Directory", func(t *testing.T) {
 		//Arrange
 		existingDir := "../../Bronze"
+
+		//Act
+		err := parseImageFiles(&existingDir)
+
+		//Arrange
+		if err != nil {
+			t.Error("Failed to parse existing directory")
+		}
+	})
+
+	t.Run("1 Reading Factor", func(t *testing.T) {
+		//Arrange
+		existingDir := "../../Bronze"
+		oldRF := ReadingFactor
+		ReadingFactor = 1
+		defer func() {
+			ReadingFactor = oldRF
+		}()
 
 		//Act
 		err := parseImageFiles(&existingDir)

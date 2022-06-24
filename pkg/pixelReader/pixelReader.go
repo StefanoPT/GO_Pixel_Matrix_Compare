@@ -8,8 +8,10 @@ import (
 )
 
 const PixelSize = 3
-const ReadingFactor = 4
+
 const NotEnoughEquals = -1
+
+var ReadingFactor = 4
 
 var ReadingChunck int
 
