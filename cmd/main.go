@@ -1,9 +1,9 @@
 package main
 
 import (
+	"GO_Pixel_Matrix_Compare/pkg/pixelReader"
 	"flag"
 	"fmt"
-	"pixelReader"
 	"time"
 )
 
@@ -17,9 +17,7 @@ func main() {
 
 	pixelReader.Run(directory, mainImage)
 
-	topThree := pixelReader.GetTopThreeString()
+	pixelReader.PrintTopThreeString()
 
-	fmt.Println(topThree)
-
-	fmt.Println("TIME:", time.Since(now))
+	fmt.Printf("TIME: %v\n", time.Since(now))
 }

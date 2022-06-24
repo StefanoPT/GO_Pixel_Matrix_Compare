@@ -1,4 +1,4 @@
-package main
+package pixelReader
 
 import (
 	"os"
@@ -25,7 +25,7 @@ func remakeTopThree(tt TopThree) {
 	Third = tt.ThirdRes
 }
 
-func TestUpdateResults(t *testing.T) {
+/*func TestUpdateResults(t *testing.T) {
 
 	//Arrange
 	oldTopThree := makeTopThree()
@@ -35,7 +35,7 @@ func TestUpdateResults(t *testing.T) {
 		newBest := Result{Percent: 1}
 
 		//Act
-		updateResults(newBest)
+		updateResults(1024*1024, "")
 
 		//Assert
 		if Best != newBest || Second != oldTopThree.FirstRes || Third != oldTopThree.SecondRes {
@@ -46,10 +46,10 @@ func TestUpdateResults(t *testing.T) {
 	})
 
 	t.Run("Update Third Place", func(t *testing.T) {
-		newThird := Result{Percent: 0.81}
+		newThird := 850000
 
 		//Act
-		updateResults(newThird)
+		updateResults(newThird, "")
 
 		//Assert
 		if Best != oldTopThree.FirstRes || Second != oldTopThree.SecondRes || Third != newThird {
@@ -73,11 +73,11 @@ func TestUpdateResults(t *testing.T) {
 		remakeTopThree(oldTopThree)
 
 	})
-}
+}*/
 
 func TestMakeMainImage(t *testing.T) {
 	//Arrange
-	fn := "./Bronze/main.raw"
+	fn := "../../Bronze/main.raw"
 	testFile, err := os.ReadFile(fn)
 
 	if err != nil {
@@ -89,9 +89,10 @@ func TestMakeMainImage(t *testing.T) {
 		matrix     Matrix
 	}
 
-	expected := ExpectedValues{matrixSize: len(testFile) / PixelSize, matrix: Matrix{Pixels: make([]Pixel, len(testFile)), Size: len(testFile) / PixelSize}}
+	sizeTF := len(testFile)
+	expected := ExpectedValues{matrixSize: sizeTF / PixelSize, matrix: Matrix{Pixels: make([][3]byte, MatrixSize), Size: sizeTF / PixelSize}}
 	//Act
-	makeMainImage(testFile, fn)
+	makeMainImage(&testFile, &fn)
 
 	//Assert
 	if MatrixSize != expected.matrixSize || MainImage.Size != expected.matrix.Size {
@@ -102,22 +103,22 @@ func TestMakeMainImage(t *testing.T) {
 func TestParseMainImage(t *testing.T) {
 	t.Run("fail: Wrong File Name", func(t *testing.T) {
 		//Arrange
-		fname := "./Bronze/fail.raw"
+		fname := "../../Bronze/fail.raw"
 		//Act
-		parsed, err := parseMainImage(fname)
+		err := parseMainImage(&fname)
 		//Assert
-		if parsed != false || err == nil {
+		if err == nil {
 			t.Errorf("Parsed non existing Image")
 		}
 	})
 
 	t.Run("pass: Parsed existing file", func(t *testing.T) {
 		//Arrange
-		fname := "./Bronze/main.raw"
+		fname := "../../Bronze/main.raw"
 		//Act
-		parsed, err := parseMainImage(fname)
+		err := parseMainImage(&fname)
 		//Assert
-		if parsed != true || err != nil {
+		if err != nil {
 			t.Errorf("Didn't parse existing Image")
 		}
 	})
@@ -129,7 +130,7 @@ func TestParseImageFiles(t *testing.T) {
 		nonExistentDir := "./NA"
 
 		//Act
-		err := parseImageFiles(nonExistentDir)
+		err := parseImageFiles(&nonExistentDir)
 
 		//Arrange
 		if err == nil {
@@ -139,10 +140,10 @@ func TestParseImageFiles(t *testing.T) {
 
 	t.Run("Existint Directory", func(t *testing.T) {
 		//Arrange
-		existingDir := "./Bronze"
+		existingDir := "../../Bronze"
 
 		//Act
-		err := parseImageFiles(existingDir)
+		err := parseImageFiles(&existingDir)
 
 		//Arrange
 		if err != nil {
@@ -154,11 +155,11 @@ func TestParseImageFiles(t *testing.T) {
 func BenchmarkParseMainImage(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		//Arrange
-		fname := "./Bronze/main.raw"
+		fname := "../../Bronze/main.raw"
 		//Act
-		parsed, err := parseMainImage(fname)
+		err := parseMainImage(&fname)
 		//Assert
-		if parsed != true || err != nil {
+		if err != nil {
 			b.Errorf("Didn't parse existing Image")
 		}
 	}
@@ -166,17 +167,17 @@ func BenchmarkParseMainImage(b *testing.B) {
 
 func BenchmarkParseImageFiles(b *testing.B) {
 	//Arrange
-	fname := "./Bronze/main.raw"
-	_, err := parseMainImage(fname)
+	fname := "../../Gold/main.raw"
+	err := parseMainImage(&fname)
 	if err != nil {
 		b.Fatalf("%v", err)
 	}
 
-	existingDir := "./Gold"
+	existingDir := "../../Gold"
 
 	for i := 0; i < b.N; i++ {
 		//Act
-		err := parseImageFiles(existingDir)
+		err := parseImageFiles(&existingDir)
 
 		//Assert
 		if err != nil {
