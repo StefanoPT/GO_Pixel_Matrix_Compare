@@ -11,7 +11,7 @@ type TopThree struct {
 	ThirdRes  Result
 }
 
-func makeTopThree() TopThree {
+/*func makeTopThree() TopThree {
 	best := Result{Percent: 0.99}
 	second := Result{Percent: 0.9}
 	third := Result{Percent: 0.8}
@@ -90,12 +90,12 @@ func TestMakeMainImage(t *testing.T) {
 	}
 
 	sizeTF := len(testFile)
-	expected := ExpectedValues{matrixSize: sizeTF / PixelSize, matrix: Matrix{Pixels: make([][3]byte, MatrixSize), Size: sizeTF / PixelSize}}
+	expected := ExpectedValues{matrixSize: sizeTF, matrix: Matrix{Pixels: make([]byte, MatrixSize), NumberPixels: sizeTF / PixelSize}}
 	//Act
 	makeMainImage(&testFile, &fn)
 
 	//Assert
-	if MatrixSize != expected.matrixSize || MainImage.Size != expected.matrix.Size {
+	if MatrixSize != expected.matrixSize || MainImage.NumberPixels != expected.matrix.NumberPixels {
 		t.Error("Failed to make main image")
 	}
 }
@@ -114,7 +114,7 @@ func TestSetUp(t *testing.T) {
 	}
 }
 
-func TestComparePixels(t *testing.T) {
+/*func TestComparePixels(t *testing.T) {
 	t.Run("Successfull compare", func(t *testing.T) {
 		//Arrange
 		r := byte(255)
@@ -131,6 +131,14 @@ func TestComparePixels(t *testing.T) {
 
 	t.Run("Failure Compare", func(t *testing.T) {
 		//Arrange
+		//Arrange
+		fn := "../../Bronze/main.raw"
+		testFile, err := os.ReadFile(fn)
+
+		if err != nil {
+			t.Fatalf("Failed to read testing file for image")
+		}
+		makeMainImage(&testFile, &fn)
 		r := byte(255)
 		g := byte(255)
 		b := byte(0)
@@ -143,6 +151,7 @@ func TestComparePixels(t *testing.T) {
 		}
 	})
 }
+*/
 
 func TestParseMainImage(t *testing.T) {
 	t.Run("fail: Wrong File Name", func(t *testing.T) {
