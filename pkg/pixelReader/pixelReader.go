@@ -40,6 +40,9 @@ var Third Result
 
 func updateResults(numEqual int, fname *string) {
 	percent := float64(numEqual) / float64(MainImage.NumberPixels)
+	if percent <= Third.Percent {
+		return
+	}
 	res := Result{File: *fname, Percent: percent, NumberOfEqualPixels: numEqual}
 	if percent > Best.Percent {
 		Third = Second
@@ -52,9 +55,7 @@ func updateResults(numEqual int, fname *string) {
 		Second = res
 		return
 	}
-	if percent > Third.Percent {
-		Third = res
-	}
+	Third = res
 }
 
 func parseFiles(file fs.DirEntry, dir string, ch chan struct{}) {
@@ -97,10 +98,10 @@ func parseFiles(file fs.DirEntry, dir string, ch chan struct{}) {
 		numEqual += <-resultChannel
 
 		//TODO
-		if numEqual <= NotEnoughEquals && ReadingFactor == 1 {
+		/*if numEqual <= NotEnoughEquals && ReadingFactor == 1 {
 			ch <- struct{}{}
 			return
-		}
+		}*/
 	}
 
 	updateResults(numEqual, &fname)
